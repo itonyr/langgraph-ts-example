@@ -16,11 +16,14 @@
     "format": "biome --check",
     "lint:langgraph": "node scripts/checkLanggraphPaths.js",
     "lint:all": "bun format & bun lint:langgraph-json",
-    "test:all": "bun test && bun test:int && bun lint:langgraph"
+    "test:all": "bun test && bun test:int && bun lint:langgraph",
+    "start": "bunx @langchain/langgraph-cli dev"
   },
   "dependencies": {
+    "@langchain/anthropic": "^0.3.32",
     "@langchain/core": "^1.0.0-alpha.7",
-    "@langchain/langgraph": "^1.0.0-alpha.5"
+    "@langchain/langgraph": "^1.0.0-alpha.5",
+    "@langchain/langgraph-cli": "^0.0.71"
   },
   "devDependencies": {
     "@tsconfig/recommended": "^1.0.10",
@@ -29,6 +32,7 @@
     "dotenv": "^17.2.3",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.5",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "zod": "^4.1.12"
   }
 }
