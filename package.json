@@ -20,10 +20,10 @@
     "start": "bunx @langchain/langgraph-cli dev"
   },
   "dependencies": {
-    "@langchain/anthropic": "^0.3.32",
-    "@langchain/core": "^1.0.0-alpha.7",
-    "@langchain/langgraph": "^1.0.0-alpha.5",
-    "@langchain/langgraph-cli": "^0.0.71"
+    "@langchain/anthropic": "^1.5.2",
+    "@langchain/core": "^1.2.3",
+    "@langchain/langgraph": "^1.4.8",
+    "@langchain/langgraph-cli": "^1.4.3"
   },
   "devDependencies": {
     "@tsconfig/recommended": "^1.0.10",
