@@ -1,0 +1,104 @@
+name: Build Artifact Scan
+
+# There's no container image to scan for this project -- it ships as compiled TS
+# plus its resolved node dependency tree. So we build the thing, capture exactly
+# what would be shipped (dist/ + the installed dependencies), generate an SBOM of
+# it, and scan that SBOM for known vulnerabilities. If we ever add a Dockerfile,
+# point the same anchore steps at `image:` instead of `path:`/`sbom:`.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # New CVEs land against unchanged code, so scan on a timer too.
+    - cron: "42 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-scan:
+    name: Build, SBOM, vulnerability scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2.2.0
+        with:
+          # Resolves from "packageManager" in package.json.
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build
+        # Non-blocking on purpose: the repo has no CI proving `tsc` is green today,
+        # and a broken build shouldn't suppress the dependency scan below. Flip to
+        # `continue-on-error: false` (or drop the line) once the build is verified.
+        continue-on-error: true
+        run: bun run build
+
+      - name: Audit dependencies (bun)
+        # Informational -- grype below is the gate. Kept because bun audit reads
+        # the lockfile directly and catches things the SBOM path can miss.
+        continue-on-error: true
+        run: bun audit
+
+      - name: Package build artifact
+        run: |
+          mkdir -p artifact
+          tar czf artifact/app-bundle.tgz \
+            $( [ -d dist ] && echo dist ) \
+            package.json bun.lock langgraph.json
+          ls -l artifact/
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-bundle
+          path: artifact/app-bundle.tgz
+          retention-days: 14
+
+      - name: Generate SBOM
+        id: sbom
+        uses: anchore/sbom-action@v0.24.0
+        with:
+          # Scans the built workspace: dist/ plus the installed node_modules tree,
+          # which is what actually carries vulnerable code at runtime.
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+          artifact-name: sbom.spdx.json
+          upload-artifact: true
+
+      - name: Scan SBOM for vulnerabilities
+        id: grype
+        uses: anchore/scan-action@v7.4.0
+        with:
+          sbom: sbom.spdx.json
+          output-format: sarif
+          output-file: grype.sarif
+          # Everything gets reported; only critical fails the build for now.
+          # Tighten to "high" once the current findings are triaged.
+          severity-cutoff: critical
+          fail-build: true
+          cache-db: true
+
+      - name: Upload Grype SARIF
+        if: always() && hashFiles('grype.sarif') != ''
+        # Free on public repos; 403s on private repos without Advanced Security,
+        # so don't let it fail the job.
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: grype.sarif
+          category: grype

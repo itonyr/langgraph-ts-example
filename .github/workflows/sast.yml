@@ -1,0 +1,83 @@
+name: SAST & Secrets
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Daily, so new rules/detectors get applied to code that isn't changing.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  semgrep:
+    name: Semgrep (SAST)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    container:
+      # Community rulesets below are free and need no SEMGREP_APP_TOKEN.
+      image: semgrep/semgrep:1.171.0
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Mark workspace as safe for git
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Run Semgrep
+        id: semgrep
+        # continue-on-error so a finding still lets us publish the SARIF below;
+        # the gate step at the end is what actually fails the job.
+        continue-on-error: true
+        run: |
+          semgrep scan \
+            --config p/default \
+            --config p/typescript \
+            --config p/secrets \
+            --config p/owasp-top-ten \
+            --sarif --output semgrep.sarif \
+            --metrics=off \
+            --error
+
+      - name: Upload Semgrep SARIF
+        if: always() && hashFiles('semgrep.sarif') != ''
+        # Code scanning upload is free on public repos; on a private repo without
+        # GitHub Advanced Security this step 403s, so it must not fail the job.
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+      - name: Fail on Semgrep findings
+        if: steps.semgrep.outcome == 'failure'
+        run: |
+          echo "Semgrep reported findings -- see the job log or the Security > Code scanning tab."
+          exit 1
+
+  secrets:
+    name: TruffleHog (secret scan)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history: a secret that was committed and later "removed" is
+          # still a leaked secret.
+          fetch-depth: 0
+
+      - name: Scan git history for verified secrets
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" \
+            ghcr.io/trufflesecurity/trufflehog:3.96.0 \
+            git file:///repo \
+            --results=verified,unknown \
+            --no-update \
+            --fail

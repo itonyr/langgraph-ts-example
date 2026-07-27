@@ -1,0 +1,32 @@
+version: 2
+
+updates:
+  # Application dependencies. This repo uses bun (see "packageManager" in
+  # package.json + bun.lock), which Dependabot supports natively as of bun 1.1.39.
+  # Note: the bun ecosystem supports *version* updates only -- Dependabot will not
+  # open automatic security-fix PRs here, so the daily cadence is what keeps us current.
+  - package-ecosystem: "bun"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+    groups:
+      # LangChain/LangGraph are pinned to alpha lines and move together --
+      # one PR per bump-day instead of four.
+      langchain:
+        patterns:
+          - "@langchain/*"
+      dev-dependencies:
+        dependency-type: "development"
+
+  # Keep the scanning workflows themselves patched.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
