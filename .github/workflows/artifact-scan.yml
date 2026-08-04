@@ -98,7 +98,7 @@ jobs:
         # Free on public repos; 403s on private repos without Advanced Security,
         # so don't let it fail the job.
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v4
+        uses: github/codeql-action/upload-sarif@v4.37.4
         with:
           sarif_file: grype.sarif
           category: grype
