@@ -82,7 +82,7 @@ jobs:
 
       - name: Scan SBOM for vulnerabilities
         id: grype
-        uses: anchore/scan-action@v7.4.0
+        uses: anchore/scan-action@v7.4.2
         with:
           sbom: sbom.spdx.json
           output-format: sarif
